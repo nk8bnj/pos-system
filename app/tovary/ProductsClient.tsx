@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { upload } from '@vercel/blob/client'
 import Image from 'next/image'
 import NavLink from '@/components/NavLink'
 
@@ -104,15 +105,16 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
     if (!file) return
     setFileName(file.name)
     setUploading(true)
-    const fd = new FormData()
-    fd.append('file', file)
-    const res = await fetch('/api/upload', { method: 'POST', body: fd })
-    setUploading(false)
-    if (res.ok) {
-      const data = await res.json()
-      setForm((f) => ({ ...f, photoUrl: data.url }))
-    } else {
+    try {
+      const blob = await upload(file.name, file, {
+        access: 'public',
+        handleUploadUrl: '/api/upload',
+      })
+      setForm((f) => ({ ...f, photoUrl: blob.url }))
+    } catch {
       setError('Не вдалося завантажити фото')
+    } finally {
+      setUploading(false)
     }
   }
 
