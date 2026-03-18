@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import Image from 'next/image'
+
 import NavLink from '@/components/NavLink'
 
 interface Product {
@@ -198,13 +198,7 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
         {filtered.map((p) => (
           <div key={p.id} className={`overflow-hidden rounded-xl border shadow-sm ${p.stock === 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}`}>
             {p.photoUrl ? (
-              <Image
-                src={p.photoUrl}
-                alt={p.name}
-                width={400}
-                height={200}
-                className="h-40 w-full object-cover"
-              />
+              <img src={p.photoUrl} alt={p.name} className="h-40 w-full object-cover" />
             ) : (
               <div className="h-40 w-full bg-gray-100" />
             )}
@@ -272,13 +266,7 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
               <tr key={p.id} className={`border-b border-gray-100 ${p.stock === 0 ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-orange-50'}`}>
                 <td className="px-4 py-3">
                   {p.photoUrl ? (
-                    <Image
-                      src={p.photoUrl}
-                      alt={p.name}
-                      width={56}
-                      height={56}
-                      className="h-14 w-14 rounded-lg object-cover"
-                    />
+                    <img src={p.photoUrl} alt={p.name} className="h-14 w-14 rounded-lg object-cover" />
                   ) : (
                     <div className="h-14 w-14 rounded-lg bg-gray-100" />
                   )}
@@ -337,7 +325,7 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
             <div className="flex items-center gap-4 p-6 pb-4">
               <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-gray-100">
                 {sellProduct.photoUrl ? (
-                  <Image src={sellProduct.photoUrl} alt={sellProduct.name} fill className="object-cover" />
+                  <img src={sellProduct.photoUrl} alt={sellProduct.name} className="object-cover w-full h-full" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-gray-300">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -467,13 +455,7 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Фото</label>
                 {form.photoUrl && (
-                  <Image
-                    src={form.photoUrl}
-                    alt="preview"
-                    width={80}
-                    height={80}
-                    className="mb-2 h-20 w-20 rounded object-cover"
-                  />
+                  <img src={form.photoUrl} alt="preview" className="mb-2 h-20 w-20 rounded object-cover" />
                 )}
                 <input
                   ref={fileInputRef}
