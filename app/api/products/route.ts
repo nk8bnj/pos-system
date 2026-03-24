@@ -1,14 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { ProductCreateSchema } from '@/lib/validations'
+import { ProductCreateSchema, PaginationParamsSchema } from '@/lib/validations'
 
 export async function GET(req: NextRequest) {
-  const q = req.nextUrl.searchParams.get('q') ?? ''
-  const products = await prisma.product.findMany({
-    where: q ? { name: { contains: q, mode: 'insensitive' } } : undefined,
-    orderBy: { createdAt: 'desc' },
+  const searchParams = req.nextUrl.searchParams
+  const q = searchParams.get('q') ?? ''
+
+  const parsed = PaginationParamsSchema.safeParse({
+    page: searchParams.get('page') ?? undefined,
+    limit: searchParams.get('limit') ?? undefined,
   })
-  return NextResponse.json(products)
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+  }
+
+  const { page, limit } = parsed.data
+  const skip = (page - 1) * limit
+  const where = q ? { name: { contains: q, mode: 'insensitive' as const } } : undefined
+
+  const [total, data] = await Promise.all([
+    prisma.product.count({ where }),
+    prisma.product.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+  ])
+
+  const totalPages = Math.max(1, Math.ceil(total / limit))
+
+  return NextResponse.json({ data, total, page, limit, totalPages })
 }
 
 export async function POST(req: NextRequest) {

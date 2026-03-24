@@ -1,8 +1,11 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 
 import NavLink from '@/components/NavLink'
+import Pagination from '@/components/Pagination'
+import SearchInput from '@/components/SearchInput'
 
 interface Product {
   id: number
@@ -23,11 +26,27 @@ interface FormState {
   photoUrl: string
 }
 
+interface ProductsClientProps {
+  initialProducts: Product[]
+  currentPage: number
+  totalPages: number
+  total: number
+  currentSearch: string
+}
+
 const emptyForm: FormState = { name: '', price: '', cost: '', stock: '0', description: '', photoUrl: '' }
 
-export default function ProductsClient({ initialProducts }: { initialProducts: Product[] }) {
+const PAGE_LIMIT = 50
+
+export default function ProductsClient({
+  initialProducts,
+  currentPage,
+  totalPages,
+  total,
+  currentSearch,
+}: ProductsClientProps) {
+  const router = useRouter()
   const [products, setProducts] = useState<Product[]>(initialProducts)
-  const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm)
@@ -42,6 +61,14 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
   const [selling, setSelling] = useState(false)
   const [sellError, setSellError] = useState<string | null>(null)
   const [sellSuccess, setSellSuccess] = useState<string | null>(null)
+
+  // Pagination summary
+  const rangeStart = total === 0 ? 0 : (currentPage - 1) * PAGE_LIMIT + 1
+  const rangeEnd = Math.min(currentPage * PAGE_LIMIT, total)
+
+  function buildHref(page: number) {
+    return `/tovary?q=${encodeURIComponent(currentSearch)}&page=${page}`
+  }
 
   function openSell(p: Product) {
     setSellProduct(p)
@@ -73,10 +100,6 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
       setSellError(data?.message ?? 'Помилка продажу')
     }
   }
-
-  const filtered = products.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase())
-  )
 
   function openAdd() {
     setEditId(null)
@@ -151,9 +174,12 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
       cost: parseFloat(String(saved.cost)),
     }
     if (editId) {
+      // Optimistic local update for edit — no count change, no pagination reset
       setProducts((prev) => prev.map((p) => (p.id === editId ? normalized : p)))
     } else {
-      setProducts((prev) => [normalized, ...prev])
+      // New product: refresh server data and go to page 1
+      router.refresh()
+      router.push(`/tovary?q=${encodeURIComponent(currentSearch)}&page=1`)
     }
     setShowModal(false)
   }
@@ -162,6 +188,7 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
     if (!confirm('Видалити товар?')) return
     await fetch(`/api/products/${id}`, { method: 'DELETE' })
     setProducts((prev) => prev.filter((p) => p.id !== id))
+    router.refresh()
   }
 
   return (
@@ -172,13 +199,7 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
           <NavLink href="/prodazhi">Продажі</NavLink>
         </nav>
         <div className="flex flex-1 justify-center">
-          <input
-            type="text"
-            placeholder="Пошук товарів..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-          />
+          <SearchInput defaultValue={currentSearch} placeholder="Пошук товарів..." />
         </div>
         <button
           onClick={openAdd}
@@ -192,10 +213,10 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
 
       {/* Mobile card grid */}
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 md:hidden">
-        {filtered.length === 0 && (
+        {products.length === 0 && (
           <p className="text-gray-400 sm:col-span-2">Немає товарів</p>
         )}
-        {filtered.map((p) => (
+        {products.map((p) => (
           <div key={p.id} className={`overflow-hidden rounded-xl border shadow-sm ${p.stock === 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}`}>
             {p.photoUrl ? (
               <img src={p.photoUrl} alt={p.name} className="h-40 w-full object-cover" />
@@ -255,14 +276,14 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && (
+            {products.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                   Немає товарів
                 </td>
               </tr>
             )}
-            {filtered.map((p) => (
+            {products.map((p) => (
               <tr key={p.id} className={`border-b border-gray-100 ${p.stock === 0 ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-orange-50'}`}>
                 <td className="px-4 py-3">
                   {p.photoUrl ? (
@@ -308,6 +329,20 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Pagination footer */}
+      <div className="mt-4 flex flex-col items-center gap-3">
+        {total > 0 && (
+          <p className="text-sm text-gray-500">
+            Показано {rangeStart}–{rangeEnd} з {total} товарів
+          </p>
+        )}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          buildHref={buildHref}
+        />
       </div>
 
       </div>{/* end padding div */}
@@ -398,8 +433,9 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
             </h2>
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Назва</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="field-name">Назва</label>
                 <input
+                  id="field-name"
                   required
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -408,8 +444,9 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Ціна (₴)</label>
+                  <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="field-price">Ціна (₴)</label>
                   <input
+                    id="field-price"
                     required
                     type="number"
                     step="0.01"
@@ -420,8 +457,9 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Закупівельна (₴)</label>
+                  <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="field-cost">Закупівельна (₴)</label>
                   <input
+                    id="field-cost"
                     required
                     type="number"
                     step="0.01"
@@ -433,8 +471,9 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Залишок</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="field-stock">Залишок</label>
                 <input
+                  id="field-stock"
                   required
                   type="number"
                   min="0"
@@ -444,8 +483,9 @@ export default function ProductsClient({ initialProducts }: { initialProducts: P
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Опис</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="field-description">Опис</label>
                 <textarea
+                  id="field-description"
                   rows={2}
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}

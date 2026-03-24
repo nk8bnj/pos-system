@@ -1,5 +1,18 @@
 import { z } from 'zod'
 
+export const PaginationParamsSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(50),
+})
+
+export type PaginatedResponse<T> = {
+  data: T[]
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+}
+
 export const ProductCreateSchema = z.object({
   name: z.string().min(1),
   price: z.number().positive(),
