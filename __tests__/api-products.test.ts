@@ -12,19 +12,34 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
+vi.mock('@/lib/product-images', () => ({
+  uploadProductImage: vi.fn(),
+  deleteProductImage: vi.fn(),
+}))
+
 import { GET, POST } from '@/app/api/products/route'
 import { prisma } from '@/lib/prisma'
+import { deleteProductImage, uploadProductImage } from '@/lib/product-images'
 
-const mockPrisma = prisma as {
+const mockPrisma = prisma as unknown as {
   product: {
     findMany: ReturnType<typeof vi.fn>
     count: ReturnType<typeof vi.fn>
     create: ReturnType<typeof vi.fn>
   }
 }
+const mockUploadProductImage = vi.mocked(uploadProductImage)
+const mockDeleteProductImage = vi.mocked(deleteProductImage)
 
-function makeRequest(url: string, options?: RequestInit) {
+function makeRequest(url: string, options?: ConstructorParameters<typeof NextRequest>[1]) {
   return new NextRequest(url, options)
+}
+
+function makeMultipartRequest(formData: FormData) {
+  return {
+    headers: new Headers({ 'content-type': 'multipart/form-data; boundary=test' }),
+    formData: vi.fn().mockResolvedValue(formData),
+  } as unknown as NextRequest
 }
 
 describe('GET /api/products', () => {
@@ -181,5 +196,52 @@ describe('POST /api/products', () => {
     })
     const res = await POST(req)
     expect(res.status).toBe(400)
+  })
+
+  it('uploads an image together with a new product', async () => {
+    const photoUrl = 'https://project.supabase.co/storage/v1/object/public/product-images/photo.webp'
+    mockUploadProductImage.mockResolvedValue(photoUrl)
+    mockPrisma.product.create.mockResolvedValue({
+      id: 1,
+      name: 'Test',
+      price: 10,
+      cost: 5,
+      stock: 10,
+      photoUrl,
+    })
+
+    const formData = new FormData()
+    formData.append('name', 'Test')
+    formData.append('price', '10')
+    formData.append('cost', '5')
+    formData.append('stock', '10')
+    formData.append('file', new File(['image'], 'photo.jpg', { type: 'image/jpeg' }))
+
+    const res = await POST(makeMultipartRequest(formData))
+
+    expect(res.status).toBe(201)
+    expect(mockUploadProductImage).toHaveBeenCalledOnce()
+    expect(mockPrisma.product.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ photoUrl }),
+    })
+  })
+
+  it('removes a newly uploaded image when product creation fails', async () => {
+    const photoUrl = 'https://project.supabase.co/storage/v1/object/public/product-images/photo.webp'
+    mockUploadProductImage.mockResolvedValue(photoUrl)
+    mockDeleteProductImage.mockResolvedValue(undefined)
+    mockPrisma.product.create.mockRejectedValue(new Error('Database failed'))
+
+    const formData = new FormData()
+    formData.append('name', 'Test')
+    formData.append('price', '10')
+    formData.append('cost', '5')
+    formData.append('stock', '10')
+    formData.append('file', new File(['image'], 'photo.jpg', { type: 'image/jpeg' }))
+
+    const res = await POST(makeMultipartRequest(formData))
+
+    expect(res.status).toBe(500)
+    expect(mockDeleteProductImage).toHaveBeenCalledWith(photoUrl)
   })
 })

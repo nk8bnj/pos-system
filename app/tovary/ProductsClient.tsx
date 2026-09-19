@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 
 import NavLink from '@/components/NavLink'
@@ -53,6 +54,8 @@ export default function ProductsClient({
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [fileName, setFileName] = useState('')
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState('')
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -65,6 +68,12 @@ export default function ProductsClient({
   // Pagination summary
   const rangeStart = total === 0 ? 0 : (currentPage - 1) * PAGE_LIMIT + 1
   const rangeEnd = Math.min(currentPage * PAGE_LIMIT, total)
+
+  useEffect(() => {
+    return () => {
+      if (photoPreviewUrl.startsWith('blob:')) URL.revokeObjectURL(photoPreviewUrl)
+    }
+  }, [photoPreviewUrl])
 
   function buildHref(page: number) {
     return `/tovary?q=${encodeURIComponent(currentSearch)}&page=${page}`
@@ -104,6 +113,9 @@ export default function ProductsClient({
   function openAdd() {
     setEditId(null)
     setForm(emptyForm)
+    setPhotoFile(null)
+    setPhotoPreviewUrl('')
+    setFileName('')
     setError(null)
     setShowModal(true)
   }
@@ -118,25 +130,21 @@ export default function ProductsClient({
       description: p.description ?? '',
       photoUrl: p.photoUrl ?? '',
     })
+    setPhotoFile(null)
+    setPhotoPreviewUrl(p.photoUrl ?? '')
+    setFileName('')
     setError(null)
     setShowModal(true)
   }
 
-  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+
+    setPhotoFile(file)
+    setPhotoPreviewUrl(URL.createObjectURL(file))
     setFileName(file.name)
-    setUploading(true)
-    const fd = new FormData()
-    fd.append('file', file)
-    const res = await fetch('/api/upload', { method: 'POST', body: fd })
-    setUploading(false)
-    if (res.ok) {
-      const data = await res.json()
-      setForm((f) => ({ ...f, photoUrl: data.url }))
-    } else {
-      setError('Не вдалося завантажити фото')
-    }
+    setError(null)
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -151,12 +159,36 @@ export default function ProductsClient({
       description: form.description || undefined,
       photoUrl: form.photoUrl || undefined,
     }
-    const res = await fetch(editId ? `/api/products/${editId}` : '/api/products', {
-      method: editId ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    let requestBody: BodyInit = JSON.stringify(body)
+    let headers: HeadersInit | undefined = { 'Content-Type': 'application/json' }
+
+    if (photoFile) {
+      const formData = new FormData()
+      Object.entries(body).forEach(([key, value]) => {
+        if (value !== undefined) formData.append(key, String(value))
+      })
+      formData.append('file', photoFile)
+      requestBody = formData
+      headers = undefined
+      setUploading(true)
+    }
+
+    let res: Response
+    try {
+      res = await fetch(editId ? `/api/products/${editId}` : '/api/products', {
+        method: editId ? 'PUT' : 'POST',
+        headers,
+        body: requestBody,
+      })
+    } catch {
+      setSaving(false)
+      setUploading(false)
+      setError('Не вдалося зберегти товар')
+      return
+    }
+
     setSaving(false)
+    setUploading(false)
     if (!res.ok) {
       const text = await res.text()
       try {
@@ -181,6 +213,9 @@ export default function ProductsClient({
       router.refresh()
       router.push(`/tovary?q=${encodeURIComponent(currentSearch)}&page=1`)
     }
+    setPhotoFile(null)
+    setPhotoPreviewUrl('')
+    setFileName('')
     setShowModal(false)
   }
 
@@ -219,7 +254,14 @@ export default function ProductsClient({
         {products.map((p) => (
           <div key={p.id} className={`overflow-hidden rounded-xl border shadow-sm ${p.stock === 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}`}>
             {p.photoUrl ? (
-              <img src={p.photoUrl} alt={p.name} className="h-40 w-full object-cover" />
+              <Image
+                src={p.photoUrl}
+                alt={p.name}
+                width={640}
+                height={320}
+                sizes="(max-width: 639px) 100vw, 50vw"
+                className="h-40 w-full object-cover"
+              />
             ) : (
               <div className="h-40 w-full bg-gray-100" />
             )}
@@ -287,7 +329,14 @@ export default function ProductsClient({
               <tr key={p.id} className={`border-b border-gray-100 ${p.stock === 0 ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-orange-50'}`}>
                 <td className="px-4 py-3">
                   {p.photoUrl ? (
-                    <img src={p.photoUrl} alt={p.name} className="h-14 w-14 rounded-lg object-cover" />
+                    <Image
+                      src={p.photoUrl}
+                      alt={p.name}
+                      width={56}
+                      height={56}
+                      sizes="56px"
+                      className="h-14 w-14 rounded-lg object-cover"
+                    />
                   ) : (
                     <div className="h-14 w-14 rounded-lg bg-gray-100" />
                   )}
@@ -360,7 +409,13 @@ export default function ProductsClient({
             <div className="flex items-center gap-4 p-6 pb-4">
               <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-gray-100">
                 {sellProduct.photoUrl ? (
-                  <img src={sellProduct.photoUrl} alt={sellProduct.name} className="object-cover w-full h-full" />
+                  <Image
+                    src={sellProduct.photoUrl}
+                    alt={sellProduct.name}
+                    fill
+                    sizes="80px"
+                    className="object-cover"
+                  />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-gray-300">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -494,8 +549,16 @@ export default function ProductsClient({
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Фото</label>
-                {form.photoUrl && (
-                  <img src={form.photoUrl} alt="preview" className="mb-2 h-20 w-20 rounded object-cover" />
+                {(photoPreviewUrl || form.photoUrl) && (
+                  <Image
+                    src={photoPreviewUrl || form.photoUrl}
+                    alt="preview"
+                    width={80}
+                    height={80}
+                    sizes="80px"
+                    unoptimized={photoPreviewUrl.startsWith('blob:')}
+                    className="mb-2 h-20 w-20 rounded object-cover"
+                  />
                 )}
                 <input
                   ref={fileInputRef}
@@ -527,7 +590,12 @@ export default function ProductsClient({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setPhotoFile(null)
+                    setPhotoPreviewUrl('')
+                    setFileName('')
+                    setShowModal(false)
+                  }}
                   className="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Скасувати

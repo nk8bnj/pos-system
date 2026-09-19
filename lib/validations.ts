@@ -24,6 +24,22 @@ export const ProductCreateSchema = z.object({
 
 export const ProductUpdateSchema = ProductCreateSchema.partial()
 
+export function productPayloadFromFormData(formData: FormData) {
+  const optionalString = (key: string) => {
+    const value = formData.get(key)
+    return typeof value === 'string' && value.trim() ? value : undefined
+  }
+
+  return {
+    name: formData.get('name'),
+    price: Number(formData.get('price')),
+    cost: Number(formData.get('cost')),
+    stock: Number(formData.get('stock')),
+    description: optionalString('description'),
+    photoUrl: optionalString('photoUrl'),
+  }
+}
+
 export const InventoryUpdateSchema = z.object({
   productId: z.number().int(),
   quantity: z.number().int().positive(),

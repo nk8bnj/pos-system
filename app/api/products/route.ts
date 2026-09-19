@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { ProductCreateSchema, PaginationParamsSchema } from '@/lib/validations'
+import { deleteProductImage, uploadProductImage } from '@/lib/product-images'
+import {
+  ProductCreateSchema,
+  PaginationParamsSchema,
+  productPayloadFromFormData,
+} from '@/lib/validations'
 
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams
@@ -35,16 +40,36 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json()
+  const isMultipart = req.headers.get('content-type')?.includes('multipart/form-data')
+  const formData = isMultipart ? await req.formData() : null
+  const body = formData ? productPayloadFromFormData(formData) : await req.json()
   const parsed = ProductCreateSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
+
+  const file = formData?.get('file')
+  let uploadedPhotoUrl: string | undefined
+
   try {
-    const product = await prisma.product.create({ data: parsed.data })
+    if (file instanceof File && file.size > 0) {
+      uploadedPhotoUrl = await uploadProductImage(file)
+    }
+
+    const product = await prisma.product.create({
+      data: { ...parsed.data, photoUrl: uploadedPhotoUrl ?? parsed.data.photoUrl },
+    })
     return NextResponse.json(product, { status: 201 })
   } catch (e) {
+    if (uploadedPhotoUrl) {
+      await deleteProductImage(uploadedPhotoUrl).catch((cleanupError) => {
+        console.error('Failed to clean up uploaded product image', cleanupError)
+      })
+    }
     console.error(e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : String(e) },
+      { status: 500 }
+    )
   }
 }

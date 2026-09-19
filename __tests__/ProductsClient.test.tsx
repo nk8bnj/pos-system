@@ -28,6 +28,17 @@ vi.mock('@/components/NavLink', () => ({
   ),
 }))
 
+vi.mock('next/image', () => ({
+  default: ({ fill, unoptimized, alt = '', ...props }: React.ImgHTMLAttributes<HTMLImageElement> & { fill?: boolean; unoptimized?: boolean }) => {
+    void fill
+    void unoptimized
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img alt={alt} {...props} />
+    )
+  },
+}))
+
 const mockPush = vi.fn()
 const mockRefresh = vi.fn()
 
