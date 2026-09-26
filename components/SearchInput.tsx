@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation'
 interface SearchInputProps {
   defaultValue: string
   placeholder?: string
+  currentAvailability?: 'all' | 'available' | 'out-of-stock'
 }
 
 export default function SearchInput({
   defaultValue,
   placeholder = 'Пошук товарів...',
+  currentAvailability = 'all',
 }: SearchInputProps) {
   const router = useRouter()
   const [, startTransition] = useTransition()
@@ -25,7 +27,10 @@ export default function SearchInput({
 
     debounceRef.current = setTimeout(() => {
       startTransition(() => {
-        router.push(`/tovary?q=${encodeURIComponent(value)}&page=1`)
+        const availabilityParam = currentAvailability === 'all'
+          ? ''
+          : `&availability=${currentAvailability}`
+        router.push(`/tovary?q=${encodeURIComponent(value)}&page=1${availabilityParam}`)
       })
     }, 300)
   }

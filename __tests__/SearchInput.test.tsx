@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act, fireEvent } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import SearchInput from '@/components/SearchInput'
 
 const mockPush = vi.fn()
@@ -66,6 +65,20 @@ describe('SearchInput', () => {
     })
 
     expect(mockPush).toHaveBeenCalledWith('/tovary?q=banana&page=1')
+  })
+
+  it('preserves the availability filter when searching', () => {
+    render(<SearchInput defaultValue="" currentAvailability="out-of-stock" />)
+    const input = screen.getByRole('textbox')
+
+    fireEvent.change(input, { target: { value: 'banana' } })
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
+
+    expect(mockPush).toHaveBeenCalledWith(
+      '/tovary?q=banana&page=1&availability=out-of-stock'
+    )
   })
 
   it('does not fire router.push before debounce delay', () => {

@@ -6,18 +6,29 @@ import ProductsClient from './ProductsClient'
 const PAGE_LIMIT = 50
 
 interface TovaryPageProps {
-  searchParams: Promise<{ page?: string; q?: string }>
+  searchParams: Promise<{ page?: string; q?: string; availability?: string }>
 }
 
 export default async function TovaryPage({ searchParams }: TovaryPageProps) {
   const params = await searchParams
   const q = params.q?.trim() ?? ''
+  const availability =
+    params.availability === 'available' || params.availability === 'out-of-stock'
+      ? params.availability
+      : 'all'
 
   // Parse and validate page number
   const rawPage = parseInt(params.page ?? '1', 10)
   const requestedPage = isNaN(rawPage) || rawPage < 1 ? 1 : rawPage
 
-  const where = q ? { name: { contains: q, mode: 'insensitive' as const } } : undefined
+  const where = {
+    ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
+    ...(availability === 'available'
+      ? { stock: { gt: 0 } }
+      : availability === 'out-of-stock'
+        ? { stock: 0 }
+        : {}),
+  }
 
   // First pass: get total count with tentative page
   const total = await prisma.product.count({ where })
@@ -46,12 +57,13 @@ export default async function TovaryPage({ searchParams }: TovaryPageProps) {
 
   return (
     <ProductsClient
-      key={`${page}-${q}`}
+      key={`${page}-${q}-${availability}`}
       initialProducts={serialized}
       currentPage={page}
       totalPages={totalPages}
       total={total}
       currentSearch={q}
+      currentAvailability={availability}
     />
   )
 }

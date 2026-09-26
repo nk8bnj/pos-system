@@ -15,9 +15,18 @@ vi.mock('@/components/SearchInput', () => ({
 }))
 
 vi.mock('@/components/Pagination', () => ({
-  default: ({ currentPage, totalPages }: { currentPage: number; totalPages: number }) => (
+  default: ({
+    currentPage,
+    totalPages,
+    buildHref,
+  }: {
+    currentPage: number
+    totalPages: number
+    buildHref: (page: number) => string
+  }) => (
     <div data-testid="pagination">
       page {currentPage} of {totalPages}
+      <a href={buildHref(2)}>next</a>
     </div>
   ),
 }))
@@ -61,6 +70,7 @@ const defaultProps = {
   totalPages: 3,
   total: 120,
   currentSearch: '',
+  currentAvailability: 'all' as const,
 }
 
 describe('ProductsClient', () => {
@@ -79,6 +89,36 @@ describe('ProductsClient', () => {
     const searchInput = screen.getByTestId('search-input')
     // defaultValue is a React prop; in jsdom it initializes the input value
     expect(searchInput).toHaveValue('мак')
+  })
+
+  it('shows all availability filter options', () => {
+    render(<ProductsClient {...defaultProps} />)
+
+    expect(screen.getByRole('option', { name: 'Усі товари' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'В наявності' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Немає в наявності' })).toBeInTheDocument()
+  })
+
+  it('navigates to page 1 when availability filter changes', async () => {
+    render(<ProductsClient {...defaultProps} currentSearch="Apple" />)
+
+    await userEvent.selectOptions(screen.getByLabelText('Наявність товарів'), 'available')
+
+    expect(mockPush).toHaveBeenCalledWith('/tovary?q=Apple&page=1&availability=available')
+  })
+
+  it('preserves the availability filter in pagination links', () => {
+    render(
+      <ProductsClient
+        {...defaultProps}
+        currentAvailability="out-of-stock"
+      />
+    )
+
+    expect(screen.getByRole('link', { name: 'next' })).toHaveAttribute(
+      'href',
+      '/tovary?q=&page=2&availability=out-of-stock'
+    )
   })
 
   it('renders Pagination component with correct props', () => {

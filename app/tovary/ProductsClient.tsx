@@ -33,6 +33,7 @@ interface ProductsClientProps {
   totalPages: number
   total: number
   currentSearch: string
+  currentAvailability: 'all' | 'available' | 'out-of-stock'
 }
 
 const emptyForm: FormState = { name: '', price: '', cost: '', stock: '0', description: '', photoUrl: '' }
@@ -45,6 +46,7 @@ export default function ProductsClient({
   totalPages,
   total,
   currentSearch,
+  currentAvailability,
 }: ProductsClientProps) {
   const router = useRouter()
   const [products, setProducts] = useState<Product[]>(initialProducts)
@@ -76,7 +78,16 @@ export default function ProductsClient({
   }, [photoPreviewUrl])
 
   function buildHref(page: number) {
-    return `/tovary?q=${encodeURIComponent(currentSearch)}&page=${page}`
+    const availabilityParam = currentAvailability === 'all'
+      ? ''
+      : `&availability=${currentAvailability}`
+    return `/tovary?q=${encodeURIComponent(currentSearch)}&page=${page}${availabilityParam}`
+  }
+
+  function handleAvailabilityChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const availability = e.target.value
+    const availabilityParam = availability === 'all' ? '' : `&availability=${availability}`
+    router.push(`/tovary?q=${encodeURIComponent(currentSearch)}&page=1${availabilityParam}`)
   }
 
   function openSell(p: Product) {
@@ -211,7 +222,10 @@ export default function ProductsClient({
     } else {
       // New product: refresh server data and go to page 1
       router.refresh()
-      router.push(`/tovary?q=${encodeURIComponent(currentSearch)}&page=1`)
+      const availabilityParam = currentAvailability === 'all'
+        ? ''
+        : `&availability=${currentAvailability}`
+      router.push(`/tovary?q=${encodeURIComponent(currentSearch)}&page=1${availabilityParam}`)
     }
     setPhotoFile(null)
     setPhotoPreviewUrl('')
@@ -228,13 +242,44 @@ export default function ProductsClient({
 
   return (
     <div>
-      <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-gray-200 bg-white px-6 py-3 shadow-sm">
+      <header className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-gray-200 bg-white px-4 py-3 shadow-sm md:flex-nowrap md:gap-4 md:px-6">
         <nav className="flex items-center gap-2">
           <NavLink href="/tovary">Товари</NavLink>
           <NavLink href="/prodazhi">Продажі</NavLink>
         </nav>
-        <div className="flex flex-1 justify-center">
-          <SearchInput defaultValue={currentSearch} placeholder="Пошук товарів..." />
+        <div className="order-3 flex w-full min-w-0 items-center justify-center gap-2 md:order-none md:w-auto md:flex-1">
+          <SearchInput
+            defaultValue={currentSearch}
+            placeholder="Пошук товарів..."
+            currentAvailability={currentAvailability}
+          />
+          <label className="sr-only" htmlFor="availability-filter">Наявність товарів</label>
+          <div className="relative shrink-0">
+            <select
+              id="availability-filter"
+              value={currentAvailability}
+              onChange={handleAvailabilityChange}
+              className="appearance-none rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-10 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-400"
+            >
+              <option value="all">Усі товари</option>
+              <option value="available">В наявності</option>
+              <option value="out-of-stock">Немає в наявності</option>
+            </select>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="none"
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600"
+            >
+              <path
+                d="m5 7.5 5 5 5-5"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
         </div>
         <button
           onClick={openAdd}
